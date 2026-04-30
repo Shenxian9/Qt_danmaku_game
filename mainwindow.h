@@ -34,21 +34,14 @@ private:
     struct Bullet
     {
         QPointF pos;
-        float speed;
-    };
-
-    struct Enemy
-    {
-        QPointF pos;
-        float speed;
-        float radius;
+        QPointF velocity;
+        int age = 0;
     };
 
     void resetPlayer();
-    void updateBullets(float dt);
-    void updateEnemies(float dt);
-    void spawnEnemy();
-    void shootBullet();
+    void restartGame();
+    void emitEnemyBullets();
+    void updateEnemyBullets();
     void resolveCollisions();
 
     Ui::MainWindow *ui;
@@ -58,15 +51,25 @@ private:
 
     QRectF m_playerRect;
     float m_playerSpeedFactor = 1.0f;
+    float m_playerRadius = 18.0f;
 
-    QVector<Bullet> m_bullets;
-    QVector<Enemy> m_enemies;
+    QPointF m_enemyCenter;
+    float m_enemyRadius = 30.0f;
+
+    QVector<Bullet> m_enemyBullets;
 
     QPointF m_lastDragPos;
     bool m_dragging = false;
 
-    float m_bulletSpawnAccumulator = 0.0f;
-    float m_enemySpawnAccumulator = 0.0f;
+    int m_frame = 0;
+    float m_phase = 0.0f;
+
+    int m_ways = 5;
+    float m_alpha = 3.1415926f / 1600.0f;
+    int m_emitEvery = 2;
+    float m_spawnRadius = 12.0f;
+    float m_bulletSpeed = 3.0f;
+    int m_maxAge = 420;
 
     int m_score = 0;
     bool m_gameOver = false;

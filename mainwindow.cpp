@@ -3,9 +3,9 @@
 
 #include <QMouseEvent>
 #include <QPainter>
-#include <QRandomGenerator>
 
 #include <algorithm>
+#include <cmath>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -13,7 +13,9 @@ MainWindow::MainWindow(QWidget *parent)
 {
     ui->setupUi(this);
     setMouseTracking(true);
-    setWindowTitle(QStringLiteral("简易弹幕躲避"));
+    setWindowTitle(QStringLiteral("弹幕生存"));
+
+    restartGame();
 
     connect(&m_gameTimer, &QTimer::timeout, this, &MainWindow::gameTick);
     m_gameTimer.start(m_tickMs);
@@ -33,21 +35,22 @@ void MainWindow::paintEvent(QPaintEvent *event)
     p.fillRect(rect(), QColor(10, 10, 20));
 
     p.setPen(Qt::NoPen);
+
+    p.setBrush(QColor(255, 120, 120));
+    p.drawEllipse(m_enemyCenter, m_enemyRadius, m_enemyRadius);
+
+    p.setBrush(QColor(255, 180, 180, 120));
+    p.drawEllipse(m_enemyCenter, m_spawnRadius, m_spawnRadius);
+
+    p.setBrush(QColor(255, 220, 120));
+    for (const Bullet &bullet : std::as_const(m_enemyBullets)) {
+        p.drawEllipse(bullet.pos, 4.0, 4.0);
+    }
+
     p.setBrush(QColor(80, 180, 255));
-    p.drawRoundedRect(m_playerRect, 8, 8);
-
-    p.setBrush(QColor(255, 235, 120));
-    for (const Bullet &bullet : std::as_const(m_bullets)) {
-        p.drawEllipse(bullet.pos, 5.0, 5.0);
-    }
-
-    p.setBrush(QColor(255, 90, 90));
-    for (const Enemy &enemy : std::as_const(m_enemies)) {
-        p.drawEllipse(enemy.pos, enemy.radius, enemy.radius);
-    }
+    p.drawEllipse(m_playerRect.center(), m_playerRadius, m_playerRadius);
 
     p.setPen(QColor(220, 220, 220));
-    p.setBrush(Qt::NoBrush);
     p.drawText(20, 36, QStringLiteral("Score: %1").arg(m_score));
 
     if (m_gameOver) {
@@ -56,25 +59,28 @@ void MainWindow::paintEvent(QPaintEvent *event)
         f.setPointSize(26);
         f.setBold(true);
         p.setFont(f);
-        p.drawText(rect(), Qt::AlignCenter, QStringLiteral("GAME OVER\n继续滑动可移动"));
+        p.drawText(rect(), Qt::AlignCenter, QStringLiteral("GAME OVER\n按住并滑动重新开始"));
     }
 }
 
 void MainWindow::resizeEvent(QResizeEvent *event)
 {
     QMainWindow::resizeEvent(event);
-    resetPlayer();
+    restartGame();
 }
 
 void MainWindow::mousePressEvent(QMouseEvent *event)
 {
+    if (m_gameOver) {
+        restartGame();
+    }
     m_lastDragPos = event->localPos();
     m_dragging = true;
 }
 
 void MainWindow::mouseMoveEvent(QMouseEvent *event)
 {
-    if (!m_dragging) {
+    if (!m_dragging || m_gameOver) {
         return;
     }
 
@@ -91,108 +97,97 @@ void MainWindow::mouseMoveEvent(QMouseEvent *event)
 
 void MainWindow::gameTick()
 {
-    const float dt = m_tickMs / 1000.0f;
-
-    m_bulletSpawnAccumulator += dt;
-    m_enemySpawnAccumulator += dt;
-
-    while (m_bulletSpawnAccumulator >= 0.10f) {
-        shootBullet();
-        m_bulletSpawnAccumulator -= 0.10f;
+    if (m_gameOver) {
+        update();
+        return;
     }
 
-    while (m_enemySpawnAccumulator >= 0.55f) {
-        spawnEnemy();
-        m_enemySpawnAccumulator -= 0.55f;
+    m_phase += static_cast<float>(m_frame) * m_alpha;
+
+    if (m_frame % m_emitEvery == 0) {
+        emitEnemyBullets();
     }
 
-    updateBullets(dt);
-    updateEnemies(dt);
+    updateEnemyBullets();
     resolveCollisions();
 
+    if (!m_gameOver) {
+        ++m_score;
+    }
+
+    ++m_frame;
     update();
 }
 
 void MainWindow::resetPlayer()
 {
-    const float w = 44;
-    const float h = 44;
-    m_playerRect = QRectF(width() * 0.12, height() * 0.5 - h * 0.5, w, h);
+    const float d = m_playerRadius * 2.0f;
+    m_playerRect = QRectF(width() * 0.20 - m_playerRadius, height() * 0.5 - m_playerRadius, d, d);
 }
 
-void MainWindow::updateBullets(float dt)
+void MainWindow::restartGame()
 {
-    for (Bullet &bullet : m_bullets) {
-        bullet.pos.rx() += bullet.speed * dt;
+    resetPlayer();
+    m_enemyCenter = QPointF(width() * 0.80, height() * 0.5);
+    m_enemyBullets.clear();
+    m_frame = 0;
+    m_phase = 0.0f;
+    m_score = 0;
+    m_gameOver = false;
+}
+
+void MainWindow::emitEnemyBullets()
+{
+    for (int i = 0; i < m_ways; ++i) {
+        const float theta = m_phase + static_cast<float>(i) * 2.0f * 3.1415926f / static_cast<float>(m_ways);
+        Bullet bullet;
+        bullet.pos = QPointF(m_enemyCenter.x() + m_spawnRadius * std::cos(theta),
+                             m_enemyCenter.y() + m_spawnRadius * std::sin(theta));
+        bullet.velocity = QPointF(m_bulletSpeed * std::cos(theta),
+                                  m_bulletSpeed * std::sin(theta));
+        m_enemyBullets.push_back(bullet);
+    }
+}
+
+void MainWindow::updateEnemyBullets()
+{
+    const float limitMargin = 30.0f;
+    const float minX = -limitMargin;
+    const float minY = -limitMargin;
+    const float maxX = width() + limitMargin;
+    const float maxY = height() + limitMargin;
+
+    QVector<Bullet> kept;
+    kept.reserve(m_enemyBullets.size());
+
+    for (Bullet bullet : std::as_const(m_enemyBullets)) {
+        bullet.pos += bullet.velocity;
+        ++bullet.age;
+
+        if (bullet.age > m_maxAge) {
+            continue;
+        }
+
+        if (bullet.pos.x() < minX || bullet.pos.x() > maxX || bullet.pos.y() < minY || bullet.pos.y() > maxY) {
+            continue;
+        }
+
+        kept.push_back(bullet);
     }
 
-    m_bullets.erase(std::remove_if(m_bullets.begin(), m_bullets.end(), [this](const Bullet &b) {
-        return b.pos.x() > width() + 10;
-    }), m_bullets.end());
-}
-
-void MainWindow::updateEnemies(float dt)
-{
-    for (Enemy &enemy : m_enemies) {
-        enemy.pos.rx() -= enemy.speed * dt;
-    }
-
-    m_enemies.erase(std::remove_if(m_enemies.begin(), m_enemies.end(), [this](const Enemy &e) {
-        return e.pos.x() < -e.radius - 10;
-    }), m_enemies.end());
-}
-
-void MainWindow::spawnEnemy()
-{
-    Enemy enemy;
-    enemy.radius = static_cast<float>(QRandomGenerator::global()->bounded(16, 31));
-    enemy.speed = static_cast<float>(QRandomGenerator::global()->bounded(130, 241));
-
-    const int minY = static_cast<int>(enemy.radius);
-    const int maxYExclusive = std::max(minY + 1, height() - minY + 1);
-    enemy.pos = QPointF(width() + enemy.radius + 2,
-                        static_cast<float>(QRandomGenerator::global()->bounded(minY, maxYExclusive)));
-    m_enemies.push_back(enemy);
-}
-
-void MainWindow::shootBullet()
-{
-    Bullet bullet;
-    bullet.pos = QPointF(m_playerRect.right() + 8, m_playerRect.center().y());
-    bullet.speed = 420.0f;
-    m_bullets.push_back(bullet);
+    m_enemyBullets = kept;
 }
 
 void MainWindow::resolveCollisions()
 {
     const QPointF playerCenter = m_playerRect.center();
-    const double playerRadius = m_playerRect.width() * 0.46;
 
-    for (int i = m_enemies.size() - 1; i >= 0; --i) {
-        Enemy &enemy = m_enemies[i];
-
-        const double dxp = enemy.pos.x() - playerCenter.x();
-        const double dyp = enemy.pos.y() - playerCenter.y();
-        if (dxp * dxp + dyp * dyp < (enemy.radius + playerRadius) * (enemy.radius + playerRadius)) {
+    for (const Bullet &bullet : std::as_const(m_enemyBullets)) {
+        const double dx = bullet.pos.x() - playerCenter.x();
+        const double dy = bullet.pos.y() - playerCenter.y();
+        if (dx * dx + dy * dy <= (m_playerRadius + 4.0) * (m_playerRadius + 4.0)) {
             m_gameOver = true;
-        }
-
-        bool removed = false;
-        for (int j = m_bullets.size() - 1; j >= 0; --j) {
-            const Bullet &bullet = m_bullets[j];
-            const double dx = enemy.pos.x() - bullet.pos.x();
-            const double dy = enemy.pos.y() - bullet.pos.y();
-            if (dx * dx + dy * dy < (enemy.radius + 5.0) * (enemy.radius + 5.0)) {
-                m_enemies.removeAt(i);
-                m_bullets.removeAt(j);
-                ++m_score;
-                removed = true;
-                break;
-            }
-        }
-
-        if (removed) {
-            continue;
+            return;
         }
     }
 }
