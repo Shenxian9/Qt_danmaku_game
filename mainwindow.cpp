@@ -1,7 +1,6 @@
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
 
-#include <QDateTime>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QRandomGenerator>
@@ -15,8 +14,6 @@ MainWindow::MainWindow(QWidget *parent)
     ui->setupUi(this);
     setMouseTracking(true);
     setWindowTitle(QStringLiteral("简易弹幕躲避"));
-
-    qsrand(QDateTime::currentMSecsSinceEpoch() & 0xffffffff);
 
     connect(&m_gameTimer, &QTimer::timeout, this, &MainWindow::gameTick);
     m_gameTimer.start(m_tickMs);
@@ -71,7 +68,7 @@ void MainWindow::resizeEvent(QResizeEvent *event)
 
 void MainWindow::mousePressEvent(QMouseEvent *event)
 {
-    m_lastDragPos = event->position();
+    m_lastDragPos = event->localPos();
     m_dragging = true;
 }
 
@@ -81,8 +78,8 @@ void MainWindow::mouseMoveEvent(QMouseEvent *event)
         return;
     }
 
-    const QPointF delta = event->position() - m_lastDragPos;
-    m_lastDragPos = event->position();
+    const QPointF delta = event->localPos() - m_lastDragPos;
+    m_lastDragPos = event->localPos();
 
     m_playerRect.translate(delta.x() * m_playerSpeedFactor, delta.y() * m_playerSpeedFactor);
 
@@ -148,10 +145,13 @@ void MainWindow::updateEnemies(float dt)
 void MainWindow::spawnEnemy()
 {
     Enemy enemy;
-    enemy.radius = QRandomGenerator::global()->bounded(16.0, 30.0);
-    enemy.speed = QRandomGenerator::global()->bounded(130.0, 240.0);
+    enemy.radius = static_cast<float>(QRandomGenerator::global()->bounded(16, 31));
+    enemy.speed = static_cast<float>(QRandomGenerator::global()->bounded(130, 241));
+
+    const int minY = static_cast<int>(enemy.radius);
+    const int maxYExclusive = std::max(minY + 1, height() - minY + 1);
     enemy.pos = QPointF(width() + enemy.radius + 2,
-                        QRandomGenerator::global()->bounded(enemy.radius, height() - enemy.radius));
+                        static_cast<float>(QRandomGenerator::global()->bounded(minY, maxYExclusive)));
     m_enemies.push_back(enemy);
 }
 
