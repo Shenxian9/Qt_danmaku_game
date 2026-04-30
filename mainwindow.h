@@ -2,12 +2,10 @@
 #define MAINWINDOW_H
 
 #include <QMainWindow>
+#include <QPointF>
+#include <QVector>
 
-QT_BEGIN_NAMESPACE
-namespace Ui {
-class MainWindow;
-}
-QT_END_NAMESPACE
+class QTimer;
 
 class MainWindow : public QMainWindow
 {
@@ -15,9 +13,47 @@ class MainWindow : public QMainWindow
 
 public:
     MainWindow(QWidget *parent = nullptr);
-    ~MainWindow();
+    ~MainWindow() override = default;
+
+protected:
+    void paintEvent(QPaintEvent *event) override;
+    void mousePressEvent(QMouseEvent *event) override;
+    void mouseMoveEvent(QMouseEvent *event) override;
+    void touchEvent(QTouchEvent *event) override;
+    void resizeEvent(QResizeEvent *event) override;
 
 private:
-    Ui::MainWindow *ui;
+    struct Bullet {
+        QPointF pos;
+        qreal speed;
+    };
+
+    struct Enemy {
+        QPointF pos;
+        qreal speed;
+        qreal radius;
+    };
+
+    void updateGame();
+    void spawnEnemy();
+    void handleInputAt(const QPointF &screenPos);
+    void resetPlayer();
+
+private:
+    QTimer *m_updateTimer;
+    QTimer *m_spawnTimer;
+
+    QPointF m_playerPos;
+    qreal m_playerRadius;
+    qreal m_playerSpeed;
+    QPointF m_lastInputPos;
+    bool m_hasInput;
+
+    QVector<Bullet> m_bullets;
+    QVector<Enemy> m_enemies;
+
+    int m_score;
+    bool m_gameOver;
 };
+
 #endif // MAINWINDOW_H
