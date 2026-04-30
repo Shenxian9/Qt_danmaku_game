@@ -1,0 +1,45 @@
+# Build directories
+build/
+build-*/
+debug/
+release/
+
+# Qt Creator
+*.pro.user
+*.pro.user.*
+*.qbs.user
+*.qmake.stash
+
+# Object files
+*.o
+*.obj
+*.lo
+*.la
+
+# Libraries
+*.dll
+*.so
+*.so.*
+*.dylib
+*.a
+*.lib
+
+# Executables
+*.exe
+*.out
+*.app
+
+# moc / uic / rcc generated files
+moc_*.cpp
+ui_*.h
+qrc_*.cpp
+
+# CMake
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+compile_commands.json
+
+# Other
+*.autosave
