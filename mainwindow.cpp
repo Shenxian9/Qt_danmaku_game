@@ -269,8 +269,10 @@ void MainWindow::emitLevel1Bullets()
 
 void MainWindow::emitLevel2Bullets()
 {
-    const double angle = QRandomGenerator::global()->bounded(0.0, 2.0 * 3.1415926);
-    const double distance = QRandomGenerator::global()->bounded(m_level2MinSpawnDistance, m_level2MaxSpawnDistance);
+    const double angle = QRandomGenerator::global()->generateDouble() * (2.0 * 3.1415926);
+    const double distanceRatio = QRandomGenerator::global()->generateDouble();
+    const double distance = m_level2MinSpawnDistance +
+                            (m_level2MaxSpawnDistance - m_level2MinSpawnDistance) * distanceRatio;
     const QPointF ringCenter = QPointF(m_enemyCenter.x() + distance * std::cos(angle),
                                        m_enemyCenter.y() + distance * std::sin(angle));
 
