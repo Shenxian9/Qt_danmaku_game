@@ -3,6 +3,7 @@
 
 #include <QMouseEvent>
 #include <QPainter>
+#include <QRandomGenerator>
 
 #include <algorithm>
 #include <cmath>
@@ -15,7 +16,7 @@ MainWindow::MainWindow(QWidget *parent)
     setMouseTracking(true);
     setWindowTitle(QStringLiteral("弹幕生存"));
 
-    restartGame();
+    resetPlayer();
 
     connect(&m_gameTimer, &QTimer::timeout, this, &MainWindow::gameTick);
     m_gameTimer.start(m_tickMs);
@@ -26,6 +27,35 @@ MainWindow::~MainWindow()
     delete ui;
 }
 
+QRectF MainWindow::levelButtonRect(LevelType level) const
+{
+    const qreal w = std::min(height() * 0.72, 360.0);
+    const qreal h = 72.0;
+    const qreal x = (height() - w) * 0.5;
+    const qreal yBase = width() * 0.32;
+    const qreal y = (level == LevelType::Level1) ? yBase : (yBase + 100.0);
+    return QRectF(x, y, w, h);
+}
+
+QRectF MainWindow::retryButtonRect() const
+{
+    const qreal w = std::min(height() * 0.6, 320.0);
+    const qreal h = 60.0;
+    return QRectF((height() - w) * 0.5, width() * 0.54, w, h);
+}
+
+QRectF MainWindow::backButtonRect() const
+{
+    const qreal w = std::min(height() * 0.6, 320.0);
+    const qreal h = 60.0;
+    return QRectF((height() - w) * 0.5, width() * 0.66, w, h);
+}
+
+QPointF MainWindow::toPortraitUiPoint(const QPointF &screenPoint) const
+{
+    return QPointF(screenPoint.y(), width() - screenPoint.x());
+}
+
 void MainWindow::paintEvent(QPaintEvent *event)
 {
     Q_UNUSED(event);
@@ -33,6 +63,40 @@ void MainWindow::paintEvent(QPaintEvent *event)
     QPainter p(this);
     p.setRenderHint(QPainter::Antialiasing, true);
     p.fillRect(rect(), QColor(10, 10, 20));
+
+    if (m_sceneState == SceneState::LevelSelect) {
+        p.save();
+        p.translate(width(), 0);
+        p.rotate(90);
+        p.setPen(QColor(230, 230, 230));
+        QFont titleFont = p.font();
+        titleFont.setPointSize(28);
+        titleFont.setBold(true);
+        p.setFont(titleFont);
+        p.drawText(QRectF(0, 0, height(), width()).adjusted(0, 40, 0, 0), Qt::AlignTop | Qt::AlignHCenter, QStringLiteral("选择关卡"));
+
+        const QRectF level1Rect = levelButtonRect(LevelType::Level1);
+        const QRectF level2Rect = levelButtonRect(LevelType::Level2);
+
+        p.setPen(Qt::NoPen);
+        p.setBrush(QColor(70, 120, 220));
+        p.drawRoundedRect(level1Rect, 12, 12);
+        p.setBrush(QColor(130, 80, 220));
+        p.drawRoundedRect(level2Rect, 12, 12);
+
+        p.setPen(QColor(245, 245, 245));
+        QFont btnFont = p.font();
+        btnFont.setPointSize(16);
+        btnFont.setBold(true);
+        p.setFont(btnFont);
+        p.drawText(level1Rect, Qt::AlignCenter, QStringLiteral("第一关：旋转散射"));
+        p.drawText(level2Rect, Qt::AlignCenter, QStringLiteral("第二关：弹性扩散环"));
+
+        p.setPen(QColor(200, 200, 200));
+        p.drawText(QRectF(0, width() - 80, height(), 40), Qt::AlignCenter, QStringLiteral("点击任意关卡开始，按 ESC 或关闭窗口退出"));
+        p.restore();
+        return;
+    }
 
     p.setPen(Qt::NoPen);
 
@@ -44,7 +108,12 @@ void MainWindow::paintEvent(QPaintEvent *event)
 
     p.setBrush(QColor(255, 220, 120));
     for (const Bullet &bullet : std::as_const(m_enemyBullets)) {
-        p.drawEllipse(bullet.pos, 4.0, 4.0);
+        const double angle = std::atan2(bullet.velocity.y(), bullet.velocity.x()) * 180.0 / 3.1415926;
+        p.save();
+        p.translate(bullet.pos);
+        p.rotate(angle);
+        p.drawEllipse(QRectF(-6.0, -3.5, 12.0, 7.0));
+        p.restore();
     }
 
     p.setBrush(QColor(80, 180, 255));
@@ -52,35 +121,80 @@ void MainWindow::paintEvent(QPaintEvent *event)
 
     p.setPen(QColor(220, 220, 220));
     p.drawText(20, 36, QStringLiteral("Score: %1").arg(m_score));
+    p.drawText(20, 64, QStringLiteral("关卡: %1").arg(m_currentLevel == LevelType::Level1 ? QStringLiteral("1") : QStringLiteral("2")));
 
-    if (m_gameOver) {
+    if (m_sceneState == SceneState::GameOver) {
+        p.save();
+        p.translate(width(), 0);
+        p.rotate(90);
         p.setPen(QColor(255, 140, 140));
         QFont f = p.font();
         f.setPointSize(26);
         f.setBold(true);
         p.setFont(f);
-        p.drawText(rect(), Qt::AlignCenter, QStringLiteral("GAME OVER\n按住并滑动重新开始"));
+        p.drawText(QRectF(0, width() * 0.2, height(), 120), Qt::AlignHCenter, QStringLiteral("GAME OVER"));
+
+        const QRectF retryRect = retryButtonRect();
+        const QRectF backRect = backButtonRect();
+
+        p.setPen(Qt::NoPen);
+        p.setBrush(QColor(70, 170, 90));
+        p.drawRoundedRect(retryRect, 10, 10);
+        p.setBrush(QColor(120, 120, 140));
+        p.drawRoundedRect(backRect, 10, 10);
+
+        p.setPen(QColor(245, 245, 245));
+        QFont btnFont = p.font();
+        btnFont.setPointSize(14);
+        btnFont.setBold(true);
+        p.setFont(btnFont);
+        p.drawText(retryRect, Qt::AlignCenter, QStringLiteral("重来"));
+        p.drawText(backRect, Qt::AlignCenter, QStringLiteral("回到选关"));
+        p.restore();
     }
 }
 
 void MainWindow::resizeEvent(QResizeEvent *event)
 {
     QMainWindow::resizeEvent(event);
-    restartGame();
+    resetPlayer();
 }
 
 void MainWindow::mousePressEvent(QMouseEvent *event)
 {
-    if (m_gameOver) {
-        restartGame();
+    const QPointF clickPos = event->localPos();
+    const QPointF uiClickPos = toPortraitUiPoint(clickPos);
+
+    if (m_sceneState == SceneState::LevelSelect) {
+        if (levelButtonRect(LevelType::Level1).contains(uiClickPos)) {
+            startLevel(LevelType::Level1);
+        } else if (levelButtonRect(LevelType::Level2).contains(uiClickPos)) {
+            startLevel(LevelType::Level2);
+        }
+        update();
+        return;
     }
-    m_lastDragPos = event->localPos();
+
+    if (m_sceneState == SceneState::GameOver) {
+        if (retryButtonRect().contains(uiClickPos)) {
+            restartGame();
+            m_sceneState = SceneState::Playing;
+        } else if (backButtonRect().contains(uiClickPos)) {
+            m_sceneState = SceneState::LevelSelect;
+            m_enemyBullets.clear();
+            m_dragging = false;
+        }
+        update();
+        return;
+    }
+
+    m_lastDragPos = clickPos;
     m_dragging = true;
 }
 
 void MainWindow::mouseMoveEvent(QMouseEvent *event)
 {
-    if (!m_dragging || m_gameOver) {
+    if (!m_dragging || m_sceneState != SceneState::Playing) {
         return;
     }
 
@@ -97,21 +211,18 @@ void MainWindow::mouseMoveEvent(QMouseEvent *event)
 
 void MainWindow::gameTick()
 {
-    if (m_gameOver) {
+    if (m_sceneState != SceneState::Playing) {
         update();
         return;
     }
 
     m_phase += static_cast<float>(m_frame) * m_alpha;
 
-    if (m_frame % m_emitEvery == 0) {
-        emitEnemyBullets();
-    }
-
+    emitEnemyBullets();
     updateEnemyBullets();
     resolveCollisions();
 
-    if (!m_gameOver) {
+    if (m_sceneState == SceneState::Playing) {
         ++m_score;
     }
 
@@ -125,6 +236,13 @@ void MainWindow::resetPlayer()
     m_playerRect = QRectF(width() * 0.20 - m_playerRadius, height() * 0.5 - m_playerRadius, d, d);
 }
 
+void MainWindow::startLevel(LevelType level)
+{
+    m_currentLevel = level;
+    restartGame();
+    m_sceneState = SceneState::Playing;
+}
+
 void MainWindow::restartGame()
 {
     resetPlayer();
@@ -134,9 +252,23 @@ void MainWindow::restartGame()
     m_phase = 0.0f;
     m_score = 0;
     m_gameOver = false;
+    m_dragging = false;
 }
 
 void MainWindow::emitEnemyBullets()
+{
+    if (m_currentLevel == LevelType::Level1) {
+        if (m_frame % m_emitEvery == 0) {
+            emitLevel1Bullets();
+        }
+    } else {
+        if (m_frame % m_level2EmitEvery == 0) {
+            emitLevel2Bullets();
+        }
+    }
+}
+
+void MainWindow::emitLevel1Bullets()
 {
     for (int i = 0; i < m_ways; ++i) {
         const float theta = m_phase + static_cast<float>(i) * 2.0f * 3.1415926f / static_cast<float>(m_ways);
@@ -149,14 +281,29 @@ void MainWindow::emitEnemyBullets()
     }
 }
 
+void MainWindow::emitLevel2Bullets()
+{
+    const double angle = QRandomGenerator::global()->generateDouble() * (2.0 * 3.1415926);
+    const double distanceRatio = QRandomGenerator::global()->generateDouble();
+    const double distance = m_level2MinSpawnDistance +
+                            (m_level2MaxSpawnDistance - m_level2MinSpawnDistance) * distanceRatio;
+    const QPointF ringCenter = QPointF(m_enemyCenter.x() + distance * std::cos(angle),
+                                       m_enemyCenter.y() + distance * std::sin(angle));
+
+    for (int i = 0; i < m_level2BulletCount; ++i) {
+        const double t = static_cast<double>(i) * 2.0 * 3.1415926 / static_cast<double>(m_level2BulletCount);
+        const QPointF dir(std::cos(t), std::sin(t));
+
+        Bullet bullet;
+        bullet.pos = ringCenter + dir * m_level2InitialRingRadius;
+        bullet.velocity = dir * m_level2InitialSpeed;
+        bullet.bounces = 0;
+        m_enemyBullets.push_back(bullet);
+    }
+}
+
 void MainWindow::updateEnemyBullets()
 {
-    const float limitMargin = 30.0f;
-    const float minX = -limitMargin;
-    const float minY = -limitMargin;
-    const float maxX = width() + limitMargin;
-    const float maxY = height() + limitMargin;
-
     QVector<Bullet> kept;
     kept.reserve(m_enemyBullets.size());
 
@@ -164,11 +311,45 @@ void MainWindow::updateEnemyBullets()
         bullet.pos += bullet.velocity;
         ++bullet.age;
 
-        if (bullet.age > m_maxAge) {
+        bool bounced = false;
+        if (m_currentLevel == LevelType::Level2) {
+            if (bullet.pos.x() <= 0.0 || bullet.pos.x() >= width()) {
+                bullet.velocity.setX(-bullet.velocity.x());
+                bullet.pos.setX(qBound(0.0, bullet.pos.x(), static_cast<double>(width())));
+                bounced = true;
+            }
+            if (bullet.pos.y() <= 0.0 || bullet.pos.y() >= height()) {
+                bullet.velocity.setY(-bullet.velocity.y());
+                bullet.pos.setY(qBound(0.0, bullet.pos.y(), static_cast<double>(height())));
+                bounced = true;
+            }
+
+            if (bounced) {
+                ++bullet.bounces;
+            }
+        }
+
+        if (m_currentLevel == LevelType::Level1 && bullet.age > m_maxAge) {
             continue;
         }
 
-        if (bullet.pos.x() < minX || bullet.pos.x() > maxX || bullet.pos.y() < minY || bullet.pos.y() > maxY) {
+        if (m_currentLevel == LevelType::Level2) {
+            const double speed = std::hypot(bullet.velocity.x(), bullet.velocity.y());
+            if (bullet.age <= m_level2SlowdownFrames && speed > m_level2MinSpeed) {
+                const double newSpeed = std::max(static_cast<double>(m_level2MinSpeed),
+                                                 speed * static_cast<double>(m_level2SlowdownFactor));
+                const double ratio = newSpeed / speed;
+                bullet.velocity *= ratio;
+            }
+
+            if (bullet.bounces > 3) {
+                continue;
+            }
+        }
+
+        const float margin = 40.0f;
+        if (m_currentLevel == LevelType::Level1 &&
+            (bullet.pos.x() < -margin || bullet.pos.x() > width() + margin || bullet.pos.y() < -margin || bullet.pos.y() > height() + margin)) {
             continue;
         }
 
@@ -187,6 +368,8 @@ void MainWindow::resolveCollisions()
         const double dy = bullet.pos.y() - playerCenter.y();
         if (dx * dx + dy * dy <= (m_playerRadius + 4.0) * (m_playerRadius + 4.0)) {
             m_gameOver = true;
+            m_sceneState = SceneState::GameOver;
+            m_dragging = false;
             return;
         }
     }

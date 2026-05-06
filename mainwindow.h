@@ -31,18 +31,38 @@ private slots:
     void gameTick();
 
 private:
+    enum class SceneState {
+        LevelSelect,
+        Playing,
+        GameOver
+    };
+
+    enum class LevelType {
+        Level1,
+        Level2
+    };
+
     struct Bullet
     {
         QPointF pos;
         QPointF velocity;
         int age = 0;
+        int bounces = 0;
     };
 
     void resetPlayer();
     void restartGame();
+    void startLevel(LevelType level);
     void emitEnemyBullets();
+    void emitLevel1Bullets();
+    void emitLevel2Bullets();
     void updateEnemyBullets();
     void resolveCollisions();
+
+    QRectF levelButtonRect(LevelType level) const;
+    QRectF retryButtonRect() const;
+    QRectF backButtonRect() const;
+    QPointF toPortraitUiPoint(const QPointF &screenPoint) const;
 
     Ui::MainWindow *ui;
 
@@ -51,7 +71,7 @@ private:
 
     QRectF m_playerRect;
     float m_playerSpeedFactor = 1.0f;
-    float m_playerRadius = 18.0f;
+    float m_playerRadius = 8.0f;
 
     QPointF m_enemyCenter;
     float m_enemyRadius = 30.0f;
@@ -73,6 +93,19 @@ private:
 
     int m_score = 0;
     bool m_gameOver = false;
+
+    SceneState m_sceneState = SceneState::LevelSelect;
+    LevelType m_currentLevel = LevelType::Level1;
+
+    int m_level2EmitEvery = 36;
+    int m_level2BulletCount = 32;
+    float m_level2InitialRingRadius = 10.0f;
+    float m_level2MinSpawnDistance = 30.0f;
+    float m_level2MaxSpawnDistance = 120.0f;
+    float m_level2InitialSpeed = 7.2f;
+    float m_level2MinSpeed = 4.2f;
+    float m_level2SlowdownFactor = 0.965f;
+    int m_level2SlowdownFrames = 45;
 };
 
 #endif // MAINWINDOW_H
