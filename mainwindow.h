@@ -102,9 +102,10 @@ private:
     float m_level2InitialRingRadius = 10.0f;
     float m_level2MinSpawnDistance = 30.0f;
     float m_level2MaxSpawnDistance = 120.0f;
-    float m_level2InitialSpeed = 5.4f;
-    float m_level2MinSpeed = 2.4f;
-    float m_level2SlowdownFactor = 0.985f;
+    float m_level2InitialSpeed = 7.2f;
+    float m_level2MinSpeed = 4.2f;
+    float m_level2SlowdownFactor = 0.965f;
+    int m_level2SlowdownFrames = 45;
 };
 
 #endif // MAINWINDOW_H

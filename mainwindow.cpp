@@ -335,7 +335,7 @@ void MainWindow::updateEnemyBullets()
 
         if (m_currentLevel == LevelType::Level2) {
             const double speed = std::hypot(bullet.velocity.x(), bullet.velocity.y());
-            if (speed > m_level2MinSpeed) {
+            if (bullet.age <= m_level2SlowdownFrames && speed > m_level2MinSpeed) {
                 const double newSpeed = std::max(static_cast<double>(m_level2MinSpeed),
                                                  speed * static_cast<double>(m_level2SlowdownFactor));
                 const double ratio = newSpeed / speed;
