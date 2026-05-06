@@ -29,26 +29,31 @@ MainWindow::~MainWindow()
 
 QRectF MainWindow::levelButtonRect(LevelType level) const
 {
-    const qreal w = std::min(width() * 0.5, 360.0);
+    const qreal w = std::min(height() * 0.72, 360.0);
     const qreal h = 72.0;
-    const qreal x = (width() - w) * 0.5;
-    const qreal yBase = height() * 0.36;
+    const qreal x = (height() - w) * 0.5;
+    const qreal yBase = width() * 0.32;
     const qreal y = (level == LevelType::Level1) ? yBase : (yBase + 100.0);
     return QRectF(x, y, w, h);
 }
 
 QRectF MainWindow::retryButtonRect() const
 {
-    const qreal w = 180.0;
+    const qreal w = std::min(height() * 0.6, 320.0);
     const qreal h = 60.0;
-    return QRectF(width() * 0.5 - w - 16.0, height() * 0.65, w, h);
+    return QRectF((height() - w) * 0.5, width() * 0.54, w, h);
 }
 
 QRectF MainWindow::backButtonRect() const
 {
-    const qreal w = 220.0;
+    const qreal w = std::min(height() * 0.6, 320.0);
     const qreal h = 60.0;
-    return QRectF(width() * 0.5 + 16.0, height() * 0.65, w, h);
+    return QRectF((height() - w) * 0.5, width() * 0.66, w, h);
+}
+
+QPointF MainWindow::toPortraitUiPoint(const QPointF &screenPoint) const
+{
+    return QPointF(screenPoint.y(), width() - screenPoint.x());
 }
 
 void MainWindow::paintEvent(QPaintEvent *event)
@@ -60,12 +65,15 @@ void MainWindow::paintEvent(QPaintEvent *event)
     p.fillRect(rect(), QColor(10, 10, 20));
 
     if (m_sceneState == SceneState::LevelSelect) {
+        p.save();
+        p.translate(width(), 0);
+        p.rotate(90);
         p.setPen(QColor(230, 230, 230));
         QFont titleFont = p.font();
         titleFont.setPointSize(28);
         titleFont.setBold(true);
         p.setFont(titleFont);
-        p.drawText(rect().adjusted(0, 40, 0, 0), Qt::AlignTop | Qt::AlignHCenter, QStringLiteral("选择关卡"));
+        p.drawText(QRectF(0, 0, height(), width()).adjusted(0, 40, 0, 0), Qt::AlignTop | Qt::AlignHCenter, QStringLiteral("选择关卡"));
 
         const QRectF level1Rect = levelButtonRect(LevelType::Level1);
         const QRectF level2Rect = levelButtonRect(LevelType::Level2);
@@ -85,7 +93,8 @@ void MainWindow::paintEvent(QPaintEvent *event)
         p.drawText(level2Rect, Qt::AlignCenter, QStringLiteral("第二关：弹性扩散环"));
 
         p.setPen(QColor(200, 200, 200));
-        p.drawText(QRectF(0, height() - 80, width(), 40), Qt::AlignCenter, QStringLiteral("点击任意关卡开始，按 ESC 或关闭窗口退出"));
+        p.drawText(QRectF(0, width() - 80, height(), 40), Qt::AlignCenter, QStringLiteral("点击任意关卡开始，按 ESC 或关闭窗口退出"));
+        p.restore();
         return;
     }
 
@@ -115,12 +124,15 @@ void MainWindow::paintEvent(QPaintEvent *event)
     p.drawText(20, 64, QStringLiteral("关卡: %1").arg(m_currentLevel == LevelType::Level1 ? QStringLiteral("1") : QStringLiteral("2")));
 
     if (m_sceneState == SceneState::GameOver) {
+        p.save();
+        p.translate(width(), 0);
+        p.rotate(90);
         p.setPen(QColor(255, 140, 140));
         QFont f = p.font();
         f.setPointSize(26);
         f.setBold(true);
         p.setFont(f);
-        p.drawText(QRectF(0, height() * 0.2, width(), 120), Qt::AlignHCenter, QStringLiteral("GAME OVER"));
+        p.drawText(QRectF(0, width() * 0.2, height(), 120), Qt::AlignHCenter, QStringLiteral("GAME OVER"));
 
         const QRectF retryRect = retryButtonRect();
         const QRectF backRect = backButtonRect();
@@ -138,6 +150,7 @@ void MainWindow::paintEvent(QPaintEvent *event)
         p.setFont(btnFont);
         p.drawText(retryRect, Qt::AlignCenter, QStringLiteral("重来"));
         p.drawText(backRect, Qt::AlignCenter, QStringLiteral("回到选关"));
+        p.restore();
     }
 }
 
@@ -150,11 +163,12 @@ void MainWindow::resizeEvent(QResizeEvent *event)
 void MainWindow::mousePressEvent(QMouseEvent *event)
 {
     const QPointF clickPos = event->localPos();
+    const QPointF uiClickPos = toPortraitUiPoint(clickPos);
 
     if (m_sceneState == SceneState::LevelSelect) {
-        if (levelButtonRect(LevelType::Level1).contains(clickPos)) {
+        if (levelButtonRect(LevelType::Level1).contains(uiClickPos)) {
             startLevel(LevelType::Level1);
-        } else if (levelButtonRect(LevelType::Level2).contains(clickPos)) {
+        } else if (levelButtonRect(LevelType::Level2).contains(uiClickPos)) {
             startLevel(LevelType::Level2);
         }
         update();
@@ -162,10 +176,10 @@ void MainWindow::mousePressEvent(QMouseEvent *event)
     }
 
     if (m_sceneState == SceneState::GameOver) {
-        if (retryButtonRect().contains(clickPos)) {
+        if (retryButtonRect().contains(uiClickPos)) {
             restartGame();
             m_sceneState = SceneState::Playing;
-        } else if (backButtonRect().contains(clickPos)) {
+        } else if (backButtonRect().contains(uiClickPos)) {
             m_sceneState = SceneState::LevelSelect;
             m_enemyBullets.clear();
             m_dragging = false;
@@ -298,19 +312,21 @@ void MainWindow::updateEnemyBullets()
         ++bullet.age;
 
         bool bounced = false;
-        if (bullet.pos.x() <= 0.0 || bullet.pos.x() >= width()) {
-            bullet.velocity.setX(-bullet.velocity.x());
-            bullet.pos.setX(qBound(0.0, bullet.pos.x(), static_cast<double>(width())));
-            bounced = true;
-        }
-        if (bullet.pos.y() <= 0.0 || bullet.pos.y() >= height()) {
-            bullet.velocity.setY(-bullet.velocity.y());
-            bullet.pos.setY(qBound(0.0, bullet.pos.y(), static_cast<double>(height())));
-            bounced = true;
-        }
+        if (m_currentLevel == LevelType::Level2) {
+            if (bullet.pos.x() <= 0.0 || bullet.pos.x() >= width()) {
+                bullet.velocity.setX(-bullet.velocity.x());
+                bullet.pos.setX(qBound(0.0, bullet.pos.x(), static_cast<double>(width())));
+                bounced = true;
+            }
+            if (bullet.pos.y() <= 0.0 || bullet.pos.y() >= height()) {
+                bullet.velocity.setY(-bullet.velocity.y());
+                bullet.pos.setY(qBound(0.0, bullet.pos.y(), static_cast<double>(height())));
+                bounced = true;
+            }
 
-        if (bounced) {
-            ++bullet.bounces;
+            if (bounced) {
+                ++bullet.bounces;
+            }
         }
 
         if (m_currentLevel == LevelType::Level1 && bullet.age > m_maxAge) {

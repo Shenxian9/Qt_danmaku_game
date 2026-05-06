@@ -62,6 +62,7 @@ private:
     QRectF levelButtonRect(LevelType level) const;
     QRectF retryButtonRect() const;
     QRectF backButtonRect() const;
+    QPointF toPortraitUiPoint(const QPointF &screenPoint) const;
 
     Ui::MainWindow *ui;
 
@@ -70,7 +71,7 @@ private:
 
     QRectF m_playerRect;
     float m_playerSpeedFactor = 1.0f;
-    float m_playerRadius = 18.0f;
+    float m_playerRadius = 8.0f;
 
     QPointF m_enemyCenter;
     float m_enemyRadius = 30.0f;
