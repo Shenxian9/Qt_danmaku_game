@@ -31,18 +31,37 @@ private slots:
     void gameTick();
 
 private:
+    enum class SceneState {
+        LevelSelect,
+        Playing,
+        GameOver
+    };
+
+    enum class LevelType {
+        Level1,
+        Level2
+    };
+
     struct Bullet
     {
         QPointF pos;
         QPointF velocity;
         int age = 0;
+        int bounces = 0;
     };
 
     void resetPlayer();
     void restartGame();
+    void startLevel(LevelType level);
     void emitEnemyBullets();
+    void emitLevel1Bullets();
+    void emitLevel2Bullets();
     void updateEnemyBullets();
     void resolveCollisions();
+
+    QRectF levelButtonRect(LevelType level) const;
+    QRectF retryButtonRect() const;
+    QRectF backButtonRect() const;
 
     Ui::MainWindow *ui;
 
@@ -73,6 +92,15 @@ private:
 
     int m_score = 0;
     bool m_gameOver = false;
+
+    SceneState m_sceneState = SceneState::LevelSelect;
+    LevelType m_currentLevel = LevelType::Level1;
+
+    int m_level2EmitEvery = 36;
+    int m_level2BulletCount = 18;
+    float m_level2InitialRingRadius = 10.0f;
+    float m_level2MinSpawnDistance = 30.0f;
+    float m_level2MaxSpawnDistance = 120.0f;
 };
 
 #endif // MAINWINDOW_H
