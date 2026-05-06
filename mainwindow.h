@@ -97,10 +97,13 @@ private:
     LevelType m_currentLevel = LevelType::Level1;
 
     int m_level2EmitEvery = 36;
-    int m_level2BulletCount = 18;
+    int m_level2BulletCount = 32;
     float m_level2InitialRingRadius = 10.0f;
     float m_level2MinSpawnDistance = 30.0f;
     float m_level2MaxSpawnDistance = 120.0f;
+    float m_level2InitialSpeed = 5.4f;
+    float m_level2MinSpeed = 2.4f;
+    float m_level2SlowdownFactor = 0.985f;
 };
 
 #endif // MAINWINDOW_H

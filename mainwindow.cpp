@@ -282,7 +282,7 @@ void MainWindow::emitLevel2Bullets()
 
         Bullet bullet;
         bullet.pos = ringCenter + dir * m_level2InitialRingRadius;
-        bullet.velocity = dir * m_bulletSpeed;
+        bullet.velocity = dir * m_level2InitialSpeed;
         bullet.bounces = 0;
         m_enemyBullets.push_back(bullet);
     }
@@ -313,12 +313,22 @@ void MainWindow::updateEnemyBullets()
             ++bullet.bounces;
         }
 
-        if (bullet.age > m_maxAge) {
+        if (m_currentLevel == LevelType::Level1 && bullet.age > m_maxAge) {
             continue;
         }
 
-        if (m_currentLevel == LevelType::Level2 && bullet.bounces > 3) {
-            continue;
+        if (m_currentLevel == LevelType::Level2) {
+            const double speed = std::hypot(bullet.velocity.x(), bullet.velocity.y());
+            if (speed > m_level2MinSpeed) {
+                const double newSpeed = std::max(static_cast<double>(m_level2MinSpeed),
+                                                 speed * static_cast<double>(m_level2SlowdownFactor));
+                const double ratio = newSpeed / speed;
+                bullet.velocity *= ratio;
+            }
+
+            if (bullet.bounces > 3) {
+                continue;
+            }
         }
 
         const float margin = 40.0f;
